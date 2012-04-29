@@ -7,6 +7,11 @@ using System.Text;
 
 namespace GraphMaker
 {
+    public enum Type //Type of transport the stop/station is
+    {
+        train, tram, bus, unknown
+    };
+
     public class Station
     {
         public string Name { get; set; }
@@ -16,12 +21,14 @@ namespace GraphMaker
     }
 
     public class GraphNode
-    {
+    {   
+
         public string name { get; set; } // the name of the node
         public List<string> lines; // what lines is this station part of (ie a train line and a bus route)
         public Dictionary<string, Dictionary<string, Station>> adjacency_list; // <line, <next/prev, station>>
+        Type type;
 
-        public GraphNode(Station station, string line, Station next, Station prev)
+        public GraphNode(Station station, string line, Station next, Station prev, Type type)
         {
             name = station.Name; // set the name of the node to the name of the station
             lines = new List<string>(); // this list is kinda redundant, but you can see what lines exist in the graph if you access it
@@ -31,6 +38,8 @@ namespace GraphMaker
             adj.Add("next", next); // "next" = Station next
             adj.Add("prev", prev); // "prev" = Station prev
             adjacency_list.Add(line, adj);
+
+            this.type = type;
         }
     }
     
@@ -77,7 +86,8 @@ namespace GraphMaker
                 // ADD A NEW NODE, if we ammended an existing node, we skip this part
                 if (node_exists == false)
                 {
-                    GraphNode node = new GraphNode(line[i], line_name, next, prev); // create a new node
+                    Type type = unknown;
+                    GraphNode node = new GraphNode(line[i], line_name, next, prev, unknown); // create a new node
                     graph.Add(node); // add it to the graph
                 }
             }
@@ -211,6 +221,8 @@ namespace GraphMaker
             }
             return false; // not found, again, shouldn't happen if we are searching for a station that exists
         }
+
+        public Type unknown { get; set; }
     }
 
     public class GraphMaker
