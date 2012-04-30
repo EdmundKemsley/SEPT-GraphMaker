@@ -1,0 +1,5 @@
+C:\Users\Kemz\Documents\SEPT-GraphMaker\GraphMaker\bin\Debug\GraphMaker.exe
+C:\Users\Kemz\Documents\SEPT-GraphMaker\GraphMaker\bin\Debug\GraphMaker.pdb
+C:\Users\Kemz\Documents\SEPT-GraphMaker\GraphMaker\obj\x86\Debug\ResolveAssemblyReference.cache
+C:\Users\Kemz\Documents\SEPT-GraphMaker\GraphMaker\obj\x86\Debug\GraphMaker.exe
+C:\Users\Kemz\Documents\SEPT-GraphMaker\GraphMaker\obj\x86\Debug\GraphMaker.pdb
