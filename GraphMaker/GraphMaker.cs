@@ -7,6 +7,8 @@ using System.Text;
 
 namespace GraphMaker
 {
+    
+
     public enum Type //Type of transport the stop/station is
     {
         train, tram, bus, unknown
@@ -18,6 +20,21 @@ namespace GraphMaker
         public Dictionary<int, string> Times { get; set; }
         //public GoogleGeoCodeResponse Geo { get; set; }
         public Station(string name) { this.Name = name; this.Times = new Dictionary<int, string>(); }
+    }
+
+    /*
+     * Edmund: I am adding this in to try and create a bit of extra functionality or we will
+     * nevery know what kind of transport we are using */
+    public class Line
+    {
+        public string name { get; set; }
+        public Type type { get; set; }
+
+        public Line(string name, Type type)
+        {
+            this.name = name;
+            this.type = type;
+        }
     }
 
     /*
@@ -43,9 +60,9 @@ namespace GraphMaker
     {
         public GraphNode node { get; set; }
         public string station { get; set; }
-        public string line { get; set; }
+        public Line line { get; set; }
 
-        public PathNode(string station, string line, GraphNode node)
+        public PathNode(string station, Line line, GraphNode node)
         {
             this.station = station;
             this.line = line;
@@ -59,20 +76,22 @@ namespace GraphMaker
         public string name { get; set; } // the name of the node
         public List<string> lines; // what lines is this station part of (ie a train line and a bus route)
         public Dictionary<string, Dictionary<string, Station>> adjacency_list; // <line, <next/prev, station>>
-        Type type;
 
-        public GraphNode(Station station, string line, Station next, Station prev, Type type)
+        public Dictionary<string, Line> getLineType;
+
+        public GraphNode(Station station, string line, Station next, Station prev)
         {
             name = station.Name; // set the name of the node to the name of the station
             lines = new List<string>(); // this list is kinda redundant, but you can see what lines exist in the graph if you access it
             lines.Add(line); // add this line/route to the list of lines/routes that this station is part of
             adjacency_list = new Dictionary<string, Dictionary<string, Station>>(); // <line, <next/prev, station>>
+
+            getLineType = new Dictionary<string, Line>(); ///////////save a line object as well to save type
+
             Dictionary<string, Station> adj = new Dictionary<string, Station>(); // <next = Station, prev = Station>
             adj.Add("next", next); // "next" = Station next
             adj.Add("prev", prev); // "prev" = Station prev
             adjacency_list.Add(line, adj);
-
-            this.type = type;
         }
     }
 
@@ -85,7 +104,7 @@ namespace GraphMaker
             graph = new List<GraphNode>(); // initalise the list
         }
 
-        public void AddLineToGraph(List<Station> line, string line_name)
+        public void AddLineToGraph(List<Station> line, string line_name, Type type)
         {
             for (int i = 0; i < line.Count; i++) // for each string
             {
@@ -113,15 +132,22 @@ namespace GraphMaker
                         adj.Add("prev", prev); // set prev reference
                         n.adjacency_list.Add(line_name, adj); // add sub-Dict to main-Dict
                         node_exists = true; // set a flag
+
+                        //make temp line obj and add it to graph node as well to track type
+                        Line temp = new Line (line_name, type);
+                        n.getLineType.Add(line_name, temp);
                     }
                 }
 
                 // ADD A NEW NODE, if we ammended an existing node, we skip this part
                 if (node_exists == false)
                 {
-                    Type type = unknown;
-                    GraphNode node = new GraphNode(line[i], line_name, next, prev, unknown); // create a new node
+                    GraphNode node = new GraphNode(line[i], line_name, next, prev); // create a new node
                     graph.Add(node); // add it to the graph
+
+                    //make temp line obj and add it to graph node as well to track type
+                    Line temp = new Line(line_name, type);
+                    node.getLineType.Add(line_name, temp);
                 }
             }
         }
@@ -158,10 +184,10 @@ namespace GraphMaker
         }
 
         // Breadth First Search
-        public bool BFS(Station start, Station end)
+        public bool BFS(Station start, Station end, Type preference)
         {
             // this dictionary contains PathNode pairs, a node and it's previous node, to determine the path
-            // a PathNode contains a GraphNode and the name of the line that was used when passing the node.
+            // a PathNode contains a GraphNode and the line that was used when passing the node.
             Dictionary<PathNode, PathNode> pathnode_path = new Dictionary<PathNode, PathNode>();
 
             // FIRST CHECK IF THE start NODE EXISTS
@@ -180,16 +206,19 @@ namespace GraphMaker
             // END CHECK IF start NODE EXISTS
 
             // BFS PROPER
-            Queue<PathNode> pathnode_queue = new Queue<PathNode>(); // pathnode stores the line as well as the node
+            QueueSpace.PriorityQueue<PathNode> pathnode_queue = new QueueSpace.PriorityQueue<PathNode>(); // pathnode_queue stores the line as well as the node
             List<string> visited = new List<string>(); // this list contains the name of ALL nodes that have been visited.
 
-            pathnode_queue.Enqueue(new PathNode(root.name, "", root)); // enqueue the root node (starting point)
+            Line temp = new Line("", Type.unknown);
+
+            pathnode_queue.Enqueue(new PathNode(root.name, temp, root)); // enqueue the root node (starting point)
             visited.Add(root.name); // and mark it as visited (this list keeps track of visited nodes so they don't get visited again)
-            pathnode_path.Add(new PathNode(root.name, "", root), null); // no line given to PathNode just yet
+            pathnode_path.Add(new PathNode(root.name, temp, root), null); // no line given to PathNode just yet
 
             while (pathnode_queue.Count > 0) // while the queue is not empty, we still have nodes to check
             {
                 PathNode pathnode_check = pathnode_queue.Dequeue(); // dequeue the next node
+                string typeString = "";
 
                 if (pathnode_check.node.name == end.Name) // if this is the end node, we are done
                 {
@@ -197,12 +226,23 @@ namespace GraphMaker
 
                     PathNode pathnode_curr = pathnode_check, pathnode_prev; // set curr to the node we found and init prev to null
                     List<string> pathnode_list_path = new List<string>(); // this list contains the path
-                    pathnode_list_path.Add(pathnode_curr.line + " - " + pathnode_curr.station); // add the node we just found as the end of the path
+
+                    if (pathnode_curr.line.type == Type.unknown) typeString = "unknown";
+                    if (pathnode_curr.line.type == Type.train) typeString = "train";
+                    if (pathnode_curr.line.type == Type.bus) typeString = "bus";
+                    if (pathnode_curr.line.type == Type.tram) typeString = "tram";
+
+                    pathnode_list_path.Add(pathnode_curr.line.name + " - " + pathnode_curr.station + " via " + typeString); // add the node we just found as the end of the path
                     while (pathnode_curr.node != root) // while we are not back at the first node
                     {
                         if (pathnode_path.TryGetValue(pathnode_curr, out pathnode_prev) == true) // found a value matching the key
                         {
-                            pathnode_list_path.Add(pathnode_curr.line + " - " + pathnode_prev.station); // add the previous node to the path
+                            if (pathnode_curr.line.type == Type.unknown) typeString = "unknown";
+                            if (pathnode_curr.line.type == Type.train) typeString = "train";
+                            if (pathnode_curr.line.type == Type.bus) typeString = "bus";
+                            if (pathnode_curr.line.type == Type.tram) typeString = "tram";
+
+                            pathnode_list_path.Add(pathnode_curr.line.name + " - " + pathnode_prev.station + " via " + typeString); // add the previous node to the path
                             pathnode_curr = pathnode_prev; // set current node to previous node and repeat
                         }
                         else
@@ -221,6 +261,10 @@ namespace GraphMaker
                 }
 
                 // FIND ALL NODES THAT THIS NODE CONNECTS TO AND ADD THEM TO THE QUEUE
+
+                //For enqueuing in order
+                List<PathNode> order = new List<PathNode>();
+
                 string[] lines = pathnode_check.node.adjacency_list.Keys.ToArray<string>(); // get all the lines that this node is part of
                 foreach (string line in lines)
                 {
@@ -233,18 +277,63 @@ namespace GraphMaker
                             {
                                 if (n.name == pair.Value.Name && visited.Contains(n.name) == false) // if the node name matches the next/prev name we are checking AND we haven't visited it before
                                 {
-                                    PathNode pathnode_to_queue = new PathNode(n.name, line, n); // create a new PathNode with the node name, line and a copy of the GraphNode
-                                    pathnode_queue.Enqueue(pathnode_to_queue); // enqueue it
+                                    //Used to grab line type
+                                    Line value;
+                                    if (n.getLineType.ContainsKey(line))
+                                    {
+                                        value = n.getLineType[line];
+                                    }
+                                    else //If it can't find the line something is wrong but it won't crash with this here
+                                    {
+                                        Console.WriteLine("Couldn't find line: " + line);
+                                        value = new Line("unknown", Type.unknown);
+                                    }
+
+                                    PathNode pathnode_to_queue = new PathNode(n.name, value, n); // create a new PathNode with the node name, line and a copy of the GraphNode
+
+
+                                    if (preference == Type.unknown) // enqueue it as per usual
+                                    {
+                                        pathnode_queue.Enqueue(pathnode_to_queue);
+                                        
+                                    }
+                                    else //enqueue in order
+                                    {
+                                        if (pathnode_to_queue.line.type != preference){ //if it isn't what we prefer
+                                            pathnode_queue.Enqueue(pathnode_to_queue);
+                                        }
+                                        else{
+                                            pathnode_queue.Enqueue(pathnode_to_queue, 1);
+                                        }
+                                    }
+                                    
                                     visited.Add(n.name); // mark it as visited
                                     found = true; // flag the station does exist
                                     pathnode_path.Add(pathnode_to_queue, pathnode_check); // add the node, and it's previous node to the path so we can retrace steps at the end
                                 }
+
                             }
+
+                            
+                            
+                            
+
                             if (found == false) // the station does NOT exist, return false (this is bad and shouldn't happen, means we have bad references)
                                 return false;
                         }
                     }
+                    
                 }
+                //if (preference != Type.unknown)
+                //{
+                 //   foreach (PathNode insert in order) // Loop through List with foreach
+                 //   {
+                  //      pathnode_queue.Enqueue(insert);
+                  //  }
+                //}
+                
+                
+                
             }
             return false; // not found, again, shouldn't happen if we are searching for a station that exists
         }
@@ -273,7 +362,7 @@ namespace GraphMaker
             FrankstonLine.Add(new Station("Glenhuntly"));
             FrankstonLine.Add(new Station("Caulfield"));
 
-            graph.AddLineToGraph(FrankstonLine, "Frankston Line");
+            graph.AddLineToGraph(FrankstonLine, "Frankston Line", Type.train);
 
             DandenongLine.Add(new Station("Huntingdale"));
             DandenongLine.Add(new Station("Oakleigh"));
@@ -282,7 +371,7 @@ namespace GraphMaker
             DandenongLine.Add(new Station("Carnegie"));
             DandenongLine.Add(new Station("Caulfield"));
 
-            graph.AddLineToGraph(DandenongLine, "Dandenong Line");
+            graph.AddLineToGraph(DandenongLine, "Dandenong Line", Type.train);
 
             Bus903.Add(new Station("Warrigal Rd/Princes Hwy"));
             Bus903.Add(new Station("Oakleigh"));
@@ -291,7 +380,7 @@ namespace GraphMaker
             Bus903.Add(new Station("Warrigal/Centre Dandenong Rds"));
             Bus903.Add(new Station("Mentone"));
 
-            graph.AddLineToGraph(Bus903, "Bus 903");
+            graph.AddLineToGraph(Bus903, "Bus 903", Type.bus);
 
             graph.PrintGraph("Frankston Line");
             Console.WriteLine();
@@ -303,9 +392,43 @@ namespace GraphMaker
              * A cycle exists from Mentone >> Caulfield >> Oakleigh >> Mentone
              **/
             Console.WriteLine();
-            bool bfs_found = graph.BFS(new Station("Parkdale"), new Station("Murrumbeena"));
+            bool bfs_found = graph.BFS(new Station("Parkdale"), new Station("Huntingdale"), Type.train);
 
             Console.ReadKey();
         }
     }
 }
+
+namespace QueueSpace
+{
+    public class PriorityQueue<TValue> : PriorityQueue<TValue, int> { }
+
+    public class PriorityQueue<TValue, TPriority> where TPriority : IComparable
+    {
+        private SortedDictionary<TPriority, Queue<TValue>> dict = new SortedDictionary<TPriority, Queue<TValue>>();
+
+        public int Count { get; private set; }
+        public bool Empty { get { return Count == 0; } }
+
+        public void Enqueue(TValue val)
+        {
+            Enqueue(val, default(TPriority));
+        }
+
+        public void Enqueue(TValue val, TPriority pri)
+        {
+            ++Count;
+            if (!dict.ContainsKey(pri)) dict[pri] = new Queue<TValue>();
+            dict[pri].Enqueue(val);
+        }
+
+        public TValue Dequeue()
+        {
+            --Count;
+            var item = dict.Last();
+            if (item.Value.Count == 1) dict.Remove(item.Key);
+            return item.Value.Dequeue();
+        }
+    }
+}
+
